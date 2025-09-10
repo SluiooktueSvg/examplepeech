@@ -6,12 +6,13 @@ plugins {
 
 android {
     namespace = "com.example.examplepeech"
-    compileSdk = 34
+    compileSdk = 36
+    ndkVersion = "27.0.12077973"
 
     defaultConfig {
         applicationId = "com.example.examplepeech"
         minSdk = 21
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
     }
@@ -47,5 +48,5 @@ flutter {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.1.0")
 }
