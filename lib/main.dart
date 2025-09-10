@@ -1,122 +1,227 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:myapp/generative_ai_service.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:speech_to_text/speech_to_text.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'firebase_options.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: AuroraPage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class AuroraPage extends StatefulWidget {
+  const AuroraPage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<AuroraPage> createState() => _AuroraPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _AuroraPageState extends State<AuroraPage> with TickerProviderStateMixin {
+  late final AnimationController _controller;
+  FragmentShader? _shader;
+  final SpeechToText _speechToText = SpeechToText();
+  final GenerativeAiService _aiService = GenerativeAiService();
+  bool _speechEnabled = false;
+  String _lastWords = "";
+  String _aiResponse = "";
+  bool _isProcessing = false;
+  double _soundLevel = 0.0;
 
-  void _incrementCounter() {
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..repeat();
+
+    _loadShader();
+    _initSpeech();
+  }
+
+  void _initSpeech() async {
+    var status = await Permission.microphone.request();
+    if (status.isGranted) {
+      _speechEnabled = await _speechToText.initialize();
+    } else {
+      debugPrint("Microphone permission denied");
+    }
+    setState(() {});
+  }
+
+  void _startListening() async {
+    if (!_speechEnabled) return;
+    _lastWords = "";
+    _aiResponse = "";
+    await _speechToText.listen(
+      onResult: _onSpeechResult,
+      onSoundLevelChange: (level) {
+        setState(() {
+          _soundLevel = level;
+        });
+      },
+    );
+    setState(() {});
+  }
+
+  void _stopListening() async {
+    if (!_speechEnabled) return;
+    await _speechToText.stop();
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _isProcessing = true;
     });
+    if (_lastWords.isNotEmpty) {
+      final response = await _aiService.generateContent(_lastWords);
+      setState(() {
+        _aiResponse = response;
+        _isProcessing = false;
+      });
+    }
+     setState(() {
+        _isProcessing = false;
+      });
+  }
+
+  void _onSpeechResult(SpeechRecognitionResult result) {
+    setState(() {
+      _lastWords = result.recognizedWords;
+    });
+  }
+
+  void _loadShader() async {
+    try {
+      final program = await FragmentProgram.fromAsset('assets/shaders/aurora.frag');
+      setState(() {
+        _shader = program.fragmentShader();
+      });
+    } catch (e) {
+      debugPrint('Error loading shader: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _speechToText.stop();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
+      backgroundColor: Colors.black,
+      body: Padding(
+        padding: const EdgeInsets.all(20.0),
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+            Expanded(
+              flex: 2,
+              child: Center(
+                child: _shader == null
+                    ? const CircularProgressIndicator()
+                    : AnimatedBuilder(
+                        animation: _controller,
+                        builder: (context, child) {
+                          return ClipOval(
+                            child: CustomPaint(
+                              size: const Size(250, 250),
+                              painter: AuroraPainter(
+                                _shader!,
+                                _controller.value * 10,
+                                _speechToText.isListening ? _soundLevel * 2.0 + 0.5 : 0.5,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
+            Expanded(
+              flex: 3,
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                     Container(
+                       padding: const EdgeInsets.all(16),
+                       child: Text(
+                         _lastWords,
+                         style: const TextStyle(color: Colors.white70, fontSize: 18, fontStyle: FontStyle.italic),
+                         textAlign: TextAlign.center,
+                       ),
+                     ),
+                    if (_isProcessing)
+                      const CircularProgressIndicator(),
+                    if (_aiResponse.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(12)
+                        ),
+                        child: Text(
+                          _aiResponse,
+                          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                  ],
+                ),
+              ), 
             ),
           ],
         ),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+        onPressed: _speechToText.isNotListening ? _startListening : _stopListening,
+        tooltip: 'Listen',
+        backgroundColor: _speechToText.isListening ? Colors.red : Theme.of(context).colorScheme.secondary,
+        child: Icon(_speechToText.isNotListening ? Icons.mic_off : Icons.mic),
+      ),
     );
+  }
+}
+
+class AuroraPainter extends CustomPainter {
+  final FragmentShader shader;
+  final double time;
+  final double intensity;
+
+  AuroraPainter(this.shader, this.time, this.intensity);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    shader.setFloat(0, time);
+    shader.setFloat(1, size.width);
+    shader.setFloat(2, size.height);
+    shader.setFloat(3, intensity);
+
+    final paint = Paint()..shader = shader;
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant AuroraPainter oldDelegate) {
+    return time != oldDelegate.time || intensity != oldDelegate.intensity;
   }
 }
