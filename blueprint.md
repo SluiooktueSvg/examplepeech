@@ -15,4 +15,9 @@ This blueprint will serve as a living document, updated with each new feature an
 
 ## Current Plan
 
-*   Awaiting the first development task. Please provide a prompt to get started.
+*   **Task:** Upgrade Android Build Dependencies.
+*   **Reason:** Address build warnings from the Flutter tool to ensure future compatibility.
+*   **Steps:**
+    1.  Update Android Gradle Plugin (AGP) from `8.4.0` to `8.5.0` in `android/settings.gradle.kts`.
+    2.  Update Kotlin version from `1.9.22` to `2.0.0` in `android/settings.gradle.kts`.
+    3.  Run `flutter clean` to apply changes.
