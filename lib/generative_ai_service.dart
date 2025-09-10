@@ -1,7 +1,7 @@
 import 'package:firebase_ai/firebase_ai.dart';
 
 class GenerativeAiService {
-  final _model = FirebaseVertexAI.instance.generativeModel(model: 'gemini-1.5-flash');
+  final _model = FirebaseAI.googleAI().generativeModel(model: 'gemini-pro');
 
   Future<String> generateContent(String prompt) async {
     try {
