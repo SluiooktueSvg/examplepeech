@@ -50,4 +50,5 @@ flutter {
 
 dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib:2.1.0")
+    implementation("androidx.multidex:multidex:2.0.1")
 }
